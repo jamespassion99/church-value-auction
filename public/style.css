@@ -95,24 +95,15 @@ input {
 .stage-2 { background: #4a2e10; color: #ffb347; }
 .stage-3 { background: #123a24; color: var(--ok); }
 
-.bid-form { display: flex; gap: 10px; margin-top: 14px; }
-.bid-form input {
-  flex: 1;
-  font-size: 22px;
-  padding: 14px;
-  border-radius: 10px;
-  border: 2px solid var(--panel-2);
-  background: #10121a;
-  color: var(--text);
-  text-align: right;
-}
-.bid-form button {
-  padding: 0 22px;
+.buy-btn {
+  width: 100%;
+  margin-top: 16px;
+  padding: 16px;
+  font-size: 20px;
   background: var(--accent);
   color: #1a1a1a;
-  font-size: 18px;
 }
-.bid-form button:disabled { background: #444; color: #888; cursor: not-allowed; }
+.buy-btn:disabled { background: #444; color: #888; cursor: not-allowed; }
 
 .toast {
   margin-top: 8px;
@@ -216,4 +207,27 @@ input {
   border-radius: 16px;
 }
 .display-idle { font-size: 40px; color: var(--muted); }
-.display-end { font-size: 44px; color: var(--accent); font-weight: 800; }
+
+.reveal-wrap { text-align: center; }
+.reveal-cross {
+  font-size: 90px;
+  color: var(--accent);
+  text-shadow: 0 0 40px rgba(242, 183, 5, 0.6);
+  margin-bottom: 20px;
+}
+.reveal-title {
+  font-size: 72px;
+  font-weight: 900;
+  color: var(--accent);
+  letter-spacing: 4px;
+  margin-bottom: 24px;
+}
+.reveal-sub { font-size: 36px; color: var(--text); font-weight: 700; }
+
+.reveal-card {
+  text-align: center;
+  background: radial-gradient(circle at 50% 0%, #2a2410, var(--panel));
+}
+.reveal-card .reveal-cross { font-size: 50px; margin-bottom: 10px; }
+.reveal-card .reveal-title { font-size: 32px; margin-bottom: 10px; }
+.reveal-card .reveal-sub { font-size: 18px; }

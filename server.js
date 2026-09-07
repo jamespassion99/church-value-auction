@@ -8,25 +8,19 @@ const PORT = process.env.PORT || 3000;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'church2026';
 const STARTING_BALANCE = 365; // 單位：萬
 
-// 三段喊價的等待秒數（毫秒）：第一次 3 秒後喊出、第二次再等 7 秒、第三次(成交)再等 15 秒
-const DELAY_FIRST = 3000;
-const DELAY_SECOND = 7000;
-const DELAY_THIRD = 15000;
-
 const itemsData = JSON.parse(fs.readFileSync(path.join(__dirname, 'data', 'items.json'), 'utf8'));
 
-// 攤平成單一列表，並記錄狀態
+// 攤平成單一列表
 const allItems = [];
 for (const section of itemsData.sections) {
   for (const item of section.items) {
     allItems.push({
       id: item.id,
       title: item.title,
+      price: item.price,
       sectionId: section.id,
       sectionTitle: section.title,
-      status: 'pending', // pending | active | sold
-      winnerName: null,
-      soldPrice: null
+      opened: false // 是否曾經被主持人開放過（僅供管理者面板顯示進度用）
     });
   }
 }
@@ -34,40 +28,36 @@ function findItem(id) {
   return allItems.find((i) => i.id === id);
 }
 
-// 玩家資料：playerId -> { name, balance, socketId, connected }
+// 玩家資料：playerId -> { name, balance, socketId, connected, purchases: Map(itemId -> price) }
 const players = new Map();
 
-// 目前競標狀態
-const auction = {
-  itemId: null,
-  price: 0,
-  leaderId: null,
-  leaderName: null,
-  callStage: 0, // 0=競標中/剛喊價, 1=第一次, 2=第二次, 3=成交
-  status: 'idle', // idle | bidding | sold
-  timer: null
-};
-
+let currentItemId = null; // 目前開放讓大家決定買不買的項目
 let gameEnded = false;
 
-function clearAuctionTimer() {
-  if (auction.timer) {
-    clearTimeout(auction.timer);
-    auction.timer = null;
+function buyerCount(itemId) {
+  let count = 0;
+  for (const p of players.values()) {
+    if (p.purchases.has(itemId)) count++;
   }
+  return count;
+}
+
+function playerPurchases(player) {
+  const list = [];
+  for (const [itemId, price] of player.purchases.entries()) {
+    const item = findItem(itemId);
+    if (item) list.push({ itemId, title: item.title, price, sectionTitle: item.sectionTitle });
+  }
+  return list;
 }
 
 function publicState() {
-  const item = auction.itemId ? findItem(auction.itemId) : null;
+  const item = currentItemId ? findItem(currentItemId) : null;
   return {
     gameEnded,
     item: item
-      ? { id: item.id, title: item.title, sectionTitle: item.sectionTitle }
-      : null,
-    price: auction.price,
-    leaderName: auction.leaderName,
-    callStage: auction.callStage,
-    status: auction.status
+      ? { id: item.id, title: item.title, sectionTitle: item.sectionTitle, price: item.price, buyerCount: buyerCount(item.id) }
+      : null
   };
 }
 
@@ -80,9 +70,10 @@ function itemsSummary() {
       return {
         id: full.id,
         title: full.title,
-        status: full.status,
-        winnerName: full.winnerName,
-        soldPrice: full.soldPrice
+        price: full.price,
+        opened: full.opened,
+        active: full.id === currentItemId,
+        buyerCount: buyerCount(full.id)
       };
     })
   }));
@@ -93,7 +84,8 @@ function playersSummary() {
     id,
     name: p.name,
     balance: p.balance,
-    connected: p.connected
+    connected: p.connected,
+    boughtCount: p.purchases.size
   }));
 }
 
@@ -103,86 +95,33 @@ function broadcastState() {
   io.to('admins').emit('players:update', playersSummary());
 }
 
-function scheduleStage(nextStage, delay) {
-  clearAuctionTimer();
-  auction.timer = setTimeout(() => advanceStage(nextStage), delay);
-}
-
-function advanceStage(stage) {
-  auction.callStage = stage;
-  if (stage < 3) {
-    broadcastState();
-    const delay = stage === 1 ? DELAY_SECOND : DELAY_THIRD;
-    scheduleStage(stage + 1, delay);
-  } else {
-    // 成交
-    auction.status = 'sold';
-    const item = findItem(auction.itemId);
-    if (item) {
-      item.status = 'sold';
-      item.winnerName = auction.leaderName;
-      item.soldPrice = auction.price;
-      if (auction.leaderId && players.has(auction.leaderId)) {
-        const p = players.get(auction.leaderId);
-        p.balance -= auction.price;
-      }
-    }
-    clearAuctionTimer();
-    broadcastState();
-  }
-}
-
 function startItem(itemId) {
   const item = findItem(itemId);
-  if (!item) return { ok: false, reason: '找不到題目' };
-  if (item.status === 'sold') return { ok: false, reason: '這一題已經賣出了' };
-  if (auction.status === 'bidding') return { ok: false, reason: '目前有題目正在競標中，請先結束' };
-
-  clearAuctionTimer();
-  item.status = 'active';
-  auction.itemId = itemId;
-  auction.price = 0;
-  auction.leaderId = null;
-  auction.leaderName = null;
-  auction.callStage = 0;
-  auction.status = 'bidding';
+  if (!item) return { ok: false, reason: '找不到項目' };
+  item.opened = true;
+  currentItemId = itemId;
   broadcastState();
   return { ok: true };
 }
 
 function cancelCurrentItem() {
-  if (!auction.itemId) return;
-  const item = findItem(auction.itemId);
-  if (item && item.status === 'active') {
-    item.status = 'pending';
-  }
-  clearAuctionTimer();
-  auction.itemId = null;
-  auction.price = 0;
-  auction.leaderId = null;
-  auction.leaderName = null;
-  auction.callStage = 0;
-  auction.status = 'idle';
+  currentItemId = null;
   broadcastState();
 }
 
-function placeBid(playerId, amount) {
-  if (auction.status !== 'bidding') return { ok: false, reason: '目前沒有正在競標的題目' };
+function buyItem(playerId, itemId) {
   if (!players.has(playerId)) return { ok: false, reason: '找不到玩家，請重新加入' };
-  if (!Number.isInteger(amount) || amount <= 0) return { ok: false, reason: '請輸入正整數金額' };
+  if (itemId !== currentItemId) return { ok: false, reason: '這個項目目前沒有開放' };
 
+  const item = findItem(itemId);
   const player = players.get(playerId);
-  if (amount <= auction.price) return { ok: false, reason: `喊價必須高於目前價格 ${auction.price} 萬` };
-  if (amount > player.balance) return { ok: false, reason: `籌碼不足，你剩下 ${player.balance} 萬` };
-  if (playerId === auction.leaderId) return { ok: false, reason: '你目前已經是最高出價者' };
+  if (player.purchases.has(itemId)) return { ok: false, reason: '你已經買過這個項目了' };
+  if (player.balance < item.price) return { ok: false, reason: `籌碼不足，你剩下 ${player.balance} 萬` };
 
-  auction.price = amount;
-  auction.leaderId = playerId;
-  auction.leaderName = player.name;
-  auction.callStage = 0;
-  scheduleStage(1, DELAY_FIRST);
+  player.balance -= item.price;
+  player.purchases.set(itemId, item.price);
   broadcastState();
-  return { ok: true };
+  return { ok: true, balance: player.balance };
 }
 
 const app = express();
@@ -207,7 +146,7 @@ io.on('connection', (socket) => {
 
     if (!player) {
       id = crypto.randomUUID();
-      player = { name, balance: STARTING_BALANCE, socketId: socket.id, connected: true };
+      player = { name, balance: STARTING_BALANCE, socketId: socket.id, connected: true, purchases: new Map() };
       players.set(id, player);
     } else {
       player.name = name;
@@ -217,15 +156,14 @@ io.on('connection', (socket) => {
 
     socket.data.playerId = id;
     socket.join('players');
-    cb && cb({ ok: true, playerId: id, name: player.name, balance: player.balance });
+    cb && cb({ ok: true, playerId: id, name: player.name, balance: player.balance, purchases: playerPurchases(player) });
     io.to('admins').emit('players:update', playersSummary());
   });
 
-  socket.on('bid:submit', ({ amount }, cb) => {
+  socket.on('item:buy', ({ itemId }, cb) => {
     const playerId = socket.data.playerId;
     if (!playerId) return cb && cb({ ok: false, reason: '請先加入遊戲' });
-    const result = placeBid(playerId, Number(amount));
-    cb && cb(result);
+    cb && cb(buyItem(playerId, itemId));
   });
 
   socket.on('admin:login', (password, cb) => {
@@ -243,14 +181,19 @@ io.on('connection', (socket) => {
     cb && cb(startItem(itemId));
   });
 
-  socket.on('admin:updateItem', ({ itemId, title }, cb) => {
+  socket.on('admin:updateItem', ({ itemId, title, price }, cb) => {
     if (!socket.rooms.has('admins')) return cb && cb({ ok: false, reason: '未登入管理者' });
     const item = findItem(itemId);
-    if (!item) return cb && cb({ ok: false, reason: '找不到題目' });
-    if (item.status !== 'pending') return cb && cb({ ok: false, reason: '這一題已經開標或售出，無法修改文字（可先取消流標再修改）' });
+    if (!item) return cb && cb({ ok: false, reason: '找不到項目' });
+    if (itemId === currentItemId) return cb && cb({ ok: false, reason: '這個項目正在開放中，無法修改（請先按取消）' });
+
     title = (title || '').toString().trim().slice(0, 60);
-    if (!title) return cb && cb({ ok: false, reason: '題目文字不能空白' });
+    const priceNum = Number(price);
+    if (!title) return cb && cb({ ok: false, reason: '項目名稱不能空白' });
+    if (!Number.isInteger(priceNum) || priceNum <= 0) return cb && cb({ ok: false, reason: '價格必須是正整數' });
+
     item.title = title;
+    item.price = priceNum;
     broadcastState();
     cb && cb({ ok: true });
   });
@@ -270,15 +213,14 @@ io.on('connection', (socket) => {
 
   socket.on('admin:resetGame', (_data, cb) => {
     if (!socket.rooms.has('admins')) return cb && cb({ ok: false, reason: '未登入管理者' });
-    cancelCurrentItem();
+    currentItemId = null;
     gameEnded = false;
     for (const item of allItems) {
-      item.status = 'pending';
-      item.winnerName = null;
-      item.soldPrice = null;
+      item.opened = false;
     }
     for (const p of players.values()) {
       p.balance = STARTING_BALANCE;
+      p.purchases.clear();
     }
     broadcastState();
     cb && cb({ ok: true });

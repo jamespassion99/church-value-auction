@@ -4,39 +4,29 @@
       "id": "life",
       "title": "第一段：生活價值",
       "items": [
-        { "id": "life-1", "title": "一份穩定又高薪的工作" },
-        { "id": "life-2", "title": "環遊世界、想去哪就去哪的自由" },
-        { "id": "life-3", "title": "一棟完全屬於自己的房子" },
-        { "id": "life-4", "title": "財務自由，不用再為錢煩惱" },
-        { "id": "life-5", "title": "一個溫暖又幸福的家庭" },
-        { "id": "life-6", "title": "一群真心相待的好朋友" },
-        { "id": "life-7", "title": "健康長壽、無病無痛的身體" }
+        { "id": "life-1", "title": "最新iPhone", "price": 9 },
+        { "id": "life-2", "title": "環遊世界一年", "price": 50 },
+        { "id": "life-3", "title": "千萬年薪工作", "price": 50 },
+        { "id": "life-4", "title": "KOL意見領袖", "price": 40 }
       ]
     },
     {
       "id": "mind",
       "title": "第二段：身心價值",
       "items": [
-        { "id": "mind-1", "title": "內心真正的平安與喜樂" },
-        { "id": "mind-2", "title": "從此不再焦慮、不再害怕的自由" },
-        { "id": "mind-3", "title": "面對情緒時，能夠穩定不失控的能力" },
-        { "id": "mind-4", "title": "被身邊的人接納、肯定與需要" },
-        { "id": "mind-5", "title": "清楚知道自己人生方向的智慧" },
-        { "id": "mind-6", "title": "打從心底的自信與自我價值感" },
-        { "id": "mind-7", "title": "從過去的傷痛中得到完全的醫治" }
+        { "id": "mind-1", "title": "健康身體", "price": 56 },
+        { "id": "mind-2", "title": "幸福家庭", "price": 82 },
+        { "id": "mind-3", "title": "真心朋友", "price": 22 },
+        { "id": "mind-4", "title": "父母健康", "price": 100 },
+        { "id": "mind-5", "title": "孩子平安長大", "price": 100 }
       ]
     },
     {
       "id": "lord",
       "title": "第三段：與主的價值",
       "items": [
-        { "id": "lord-1", "title": "與神親密同行的關係" },
-        { "id": "lord-2", "title": "被神完全赦免、重新開始的平安" },
-        { "id": "lord-3", "title": "永恆的生命與盼望" },
-        { "id": "lord-4", "title": "無論環境如何，神都與你同在、保守你" },
-        { "id": "lord-5", "title": "明白神心意、走在祂旨意中的智慧" },
-        { "id": "lord-6", "title": "被神使用、活出祂賦予你的呼召" },
-        { "id": "lord-7", "title": "天上永不朽壞的獎賞" }
+        { "id": "lord-1", "title": "知道神對你生命的呼召", "price": 65 },
+        { "id": "lord-2", "title": "一顆渴慕的心", "price": 100 }
       ]
     }
   ]

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>管理者控制台 - 價值觀競標遊戲</title>
+<title>管理者控制台 - 價值大拍賣</title>
 <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
@@ -15,7 +15,7 @@
 </div>
 
 <div id="adminScreen" class="admin-wrap hidden">
-  <h2>競標控制台</h2>
+  <h2>價值大拍賣 控制台</h2>
   <div class="admin-grid">
     <div class="sections-grid" id="sectionsGrid"></div>
 
@@ -23,7 +23,7 @@
       <div class="card">
         <h3>目前狀態</h3>
         <div id="curStatus">尚未開始</div>
-        <button class="btn-cancel" id="cancelBtn">取消 / 流標目前題目</button>
+        <button class="btn-cancel" id="cancelBtn">關閉目前開放的項目</button>
         <button class="btn-end" id="endBtn">結束整場遊戲（顯示結算）</button>
         <button class="btn-reset" id="resetBtn">重設整場遊戲（危險）</button>
       </div>
@@ -34,10 +34,10 @@
       <div class="card">
         <h3>提示</h3>
         <p style="color:var(--muted);font-size:13px;line-height:1.6">
-          點選左側任一「未開始」的題目即可開始競標。<br/>
-          玩家喊價後，系統會自動跑：3秒→第一次，再7秒→第二次，再15秒→第三次成交。<br/>
-          若中途有人加價會重新從第一次開始算。<br/>
-          全部題目跑完後，按「結束整場遊戲」，接著手動切換到教會信息簡報。
+          點選左側任一項目即可開放給大家決定買不買，每個項目價格固定，玩家自己選擇要不要買。<br/>
+          同一個項目可以有很多人買（不是喊價競爭）。<br/>
+          點 ✎ 可以修改項目名稱和價格（項目正在開放中無法修改）。<br/>
+          全部項目跑完後，按「結束整場遊戲」，畫面會顯示「無法競標」結尾，接著手動切換到教會信息簡報。
         </p>
       </div>
     </div>
@@ -72,7 +72,6 @@ loginBtn.onclick = () => {
 pwInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') loginBtn.click(); });
 
 let latestItemsData = null;
-let latestState = null;
 
 function render() {
   if (!latestItemsData) return;
@@ -89,13 +88,10 @@ function render() {
 
       const btn = document.createElement('button');
       btn.className = 'item-btn';
-      if (item.status === 'sold') btn.classList.add('sold');
-      if (item.status === 'active') btn.classList.add('active');
-      let extra = '';
-      if (item.status === 'sold') extra = `<small>已售出 - ${item.winnerName} - ${item.soldPrice} 萬</small>`;
-      else if (item.status === 'active') extra = `<small>競標中</small>`;
-      else extra = `<small>尚未開始</small>`;
-      btn.innerHTML = `${item.title}${extra}`;
+      if (item.active) btn.classList.add('active');
+      else if (item.opened) btn.classList.add('sold');
+      const status = item.active ? '開放中' : (item.opened ? '曾經開放過' : '尚未開始');
+      btn.innerHTML = `${item.title}<small>${item.price} 萬 · ${status} · ${item.buyerCount} 人已買</small>`;
       btn.onclick = () => {
         socket.emit('admin:startItem', item.id, (res) => {
           if (!res.ok) alert(res.reason);
@@ -103,15 +99,17 @@ function render() {
       };
       row.appendChild(btn);
 
-      if (item.status === 'pending') {
+      if (!item.active) {
         const editBtn = document.createElement('button');
         editBtn.className = 'edit-btn';
         editBtn.textContent = '✎';
-        editBtn.title = '修改題目文字';
+        editBtn.title = '修改名稱和價格';
         editBtn.onclick = () => {
-          const newTitle = prompt('修改題目文字：', item.title);
+          const newTitle = prompt('修改項目名稱：', item.title);
           if (newTitle === null) return;
-          socket.emit('admin:updateItem', { itemId: item.id, title: newTitle }, (res) => {
+          const newPrice = prompt('修改價格（萬）：', item.price);
+          if (newPrice === null) return;
+          socket.emit('admin:updateItem', { itemId: item.id, title: newTitle, price: newPrice }, (res) => {
             if (!res.ok) alert(res.reason);
           });
         };
@@ -127,23 +125,21 @@ function render() {
 socket.on('items:update', (data) => { latestItemsData = data; render(); });
 
 socket.on('state:update', (state) => {
-  latestState = state;
   if (state.gameEnded) {
     curStatus.textContent = '遊戲已結束（顯示結算畫面）';
     return;
   }
   if (!state.item) {
-    curStatus.textContent = '尚未選題';
+    curStatus.textContent = '尚未開放項目';
     return;
   }
-  const stageText = ['競標中', '第一次', '第二次', '第三次成交'];
-  curStatus.innerHTML = `<b>${state.item.sectionTitle} - ${state.item.title}</b><br/>價格：${state.price} 萬｜最高：${state.leaderName || '無'}｜${stageText[state.callStage]}`;
+  curStatus.innerHTML = `<b>${state.item.sectionTitle} - ${state.item.title}</b><br/>價格：${state.item.price} 萬｜已有 ${state.item.buyerCount} 人購買`;
 });
 
 socket.on('players:update', (list) => {
   playerCount.textContent = list.length;
   playersList.innerHTML = list.map(p =>
-    `<div class="player-row"><span class="${p.connected ? '' : 'off'}">${p.name}${p.connected ? '' : '（離線）'}</span><span>${p.balance} 萬</span></div>`
+    `<div class="player-row"><span class="${p.connected ? '' : 'off'}">${p.name}${p.connected ? '' : '（離線）'}</span><span>${p.balance} 萬（已買${p.boughtCount}項）</span></div>`
   ).join('');
 });
 
@@ -152,7 +148,7 @@ endBtn.onclick = () => {
   if (confirm('確定要結束整場遊戲嗎？')) socket.emit('admin:endGame', {}, () => {});
 };
 resetBtn.onclick = () => {
-  if (confirm('確定要重設整場遊戲嗎？所有籌碼與題目狀態都會清空！')) socket.emit('admin:resetGame', {}, () => {});
+  if (confirm('確定要重設整場遊戲嗎？所有籌碼與購買紀錄都會清空！')) socket.emit('admin:resetGame', {}, () => {});
 };
 </script>
 </body>
