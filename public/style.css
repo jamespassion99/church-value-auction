@@ -185,7 +185,20 @@ input {
 .player-row .off { color: var(--muted); }
 
 /* ---------- Display page ---------- */
+.bg-layer {
+  position: fixed;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  background-color: var(--bg);
+  filter: blur(14px) brightness(0.42) saturate(1.15);
+  transform: scale(1.08);
+  transition: background-image 0.3s ease;
+  z-index: 0;
+}
 .display-wrap {
+  position: relative;
+  z-index: 1;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -194,11 +207,11 @@ input {
   text-align: center;
   padding: 40px;
 }
-.display-section { font-size: 28px; color: var(--accent-2); margin-bottom: 10px; }
-.display-title { font-size: 56px; font-weight: 900; max-width: 1100px; line-height: 1.4; margin-bottom: 40px; }
-.display-price { font-size: 130px; font-weight: 900; color: var(--accent); line-height: 1; }
+.display-section { font-size: 28px; color: var(--accent-2); margin-bottom: 10px; text-shadow: 0 2px 12px rgba(0,0,0,0.6); }
+.display-title { font-size: 56px; font-weight: 900; max-width: 1100px; line-height: 1.4; margin-bottom: 40px; text-shadow: 0 4px 20px rgba(0,0,0,0.7); }
+.display-price { font-size: 130px; font-weight: 900; color: var(--accent); line-height: 1; text-shadow: 0 4px 24px rgba(0,0,0,0.7); }
 .display-price .unit { font-size: 48px; margin-left: 12px; }
-.display-leader { font-size: 32px; color: var(--muted); margin-top: 10px; }
+.display-leader { font-size: 32px; color: var(--muted); margin-top: 10px; text-shadow: 0 2px 12px rgba(0,0,0,0.6); }
 .display-stage {
   margin-top: 40px;
   font-size: 40px;
@@ -221,8 +234,9 @@ input {
   color: var(--accent);
   letter-spacing: 4px;
   margin-bottom: 24px;
+  text-shadow: 0 4px 24px rgba(0,0,0,0.7);
 }
-.reveal-sub { font-size: 36px; color: var(--text); font-weight: 700; }
+.reveal-sub { font-size: 36px; color: var(--text); font-weight: 700; text-shadow: 0 2px 16px rgba(0,0,0,0.7); }
 
 .reveal-card {
   text-align: center;

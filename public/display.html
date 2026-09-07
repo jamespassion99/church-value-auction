@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
+<div class="bg-layer" id="bgLayer"></div>
 <div class="display-wrap" id="wrap">
   <div id="idleView" class="display-idle">
     <div id="idleWaiting" class="hidden">請等待主持人開放下一個項目...</div>
@@ -36,6 +37,7 @@
 <script src="/socket.io/socket.io.js"></script>
 <script>
 const socket = io();
+const bgLayer = document.getElementById('bgLayer');
 const idleView = document.getElementById('idleView');
 const itemView = document.getElementById('itemView');
 const endView = document.getElementById('endView');
@@ -43,6 +45,10 @@ const sectionLabel = document.getElementById('sectionLabel');
 const titleLabel = document.getElementById('titleLabel');
 const priceLabel = document.getElementById('priceLabel');
 const buyerCountLabel = document.getElementById('buyerCountLabel');
+
+function setBg(imageId) {
+  bgLayer.style.backgroundImage = `url('/images/${imageId}.jpg')`;
+}
 
 const joinUrl = window.location.origin + '/';
 document.getElementById('joinUrl').textContent = joinUrl;
@@ -61,15 +67,18 @@ socket.on('state:update', (state) => {
   endView.classList.add('hidden');
 
   if (state.gameEnded) {
+    setBg('reveal');
     endView.classList.remove('hidden');
     return;
   }
   if (!state.item) {
+    setBg('intro');
     idleView.classList.remove('hidden');
     document.getElementById('idleJoin').classList.toggle('hidden', anyItemEverStarted);
     document.getElementById('idleWaiting').classList.toggle('hidden', !anyItemEverStarted);
     return;
   }
+  setBg(state.item.id);
   itemView.classList.remove('hidden');
   sectionLabel.textContent = state.item.sectionTitle;
   titleLabel.textContent = state.item.title;
