@@ -19,8 +19,7 @@ for (const section of itemsData.sections) {
       title: item.title,
       price: item.price,
       sectionId: section.id,
-      sectionTitle: section.title,
-      opened: false // 是否曾經被主持人開放過（僅供管理者面板顯示進度用）
+      sectionTitle: section.title
     });
   }
 }
@@ -31,7 +30,6 @@ function findItem(id) {
 // 玩家資料：playerId -> { name, balance, socketId, connected, purchases: Map(itemId -> price) }
 const players = new Map();
 
-let currentItemId = null; // 目前開放讓大家決定買不買的項目
 let gameEnded = false;
 
 function buyerCount(itemId) {
@@ -52,13 +50,7 @@ function playerPurchases(player) {
 }
 
 function publicState() {
-  const item = currentItemId ? findItem(currentItemId) : null;
-  return {
-    gameEnded,
-    item: item
-      ? { id: item.id, title: item.title, sectionTitle: item.sectionTitle, price: item.price, buyerCount: buyerCount(item.id) }
-      : null
-  };
+  return { gameEnded };
 }
 
 function itemsSummary() {
@@ -71,8 +63,6 @@ function itemsSummary() {
         id: full.id,
         title: full.title,
         price: full.price,
-        opened: full.opened,
-        active: full.id === currentItemId,
         buyerCount: buyerCount(full.id)
       };
     })
@@ -85,7 +75,7 @@ function playersSummary() {
     name: p.name,
     balance: p.balance,
     connected: p.connected,
-    boughtCount: p.purchases.size
+    purchases: playerPurchases(p)
   }));
 }
 
@@ -95,25 +85,11 @@ function broadcastState() {
   io.to('admins').emit('players:update', playersSummary());
 }
 
-function startItem(itemId) {
-  const item = findItem(itemId);
-  if (!item) return { ok: false, reason: '找不到項目' };
-  item.opened = true;
-  currentItemId = itemId;
-  broadcastState();
-  return { ok: true };
-}
-
-function cancelCurrentItem() {
-  currentItemId = null;
-  broadcastState();
-}
-
 function buyItem(playerId, itemId) {
   if (!players.has(playerId)) return { ok: false, reason: '找不到玩家，請重新加入' };
-  if (itemId !== currentItemId) return { ok: false, reason: '這個項目目前沒有開放' };
-
   const item = findItem(itemId);
+  if (!item) return { ok: false, reason: '找不到項目' };
+
   const player = players.get(playerId);
   if (player.purchases.has(itemId)) return { ok: false, reason: '你已經買過這個項目了' };
   if (player.balance < item.price) return { ok: false, reason: `籌碼不足，你剩下 ${player.balance} 萬` };
@@ -176,16 +152,11 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('admin:startItem', (itemId, cb) => {
-    if (!socket.rooms.has('admins')) return cb && cb({ ok: false, reason: '未登入管理者' });
-    cb && cb(startItem(itemId));
-  });
-
   socket.on('admin:updateItem', ({ itemId, title, price }, cb) => {
     if (!socket.rooms.has('admins')) return cb && cb({ ok: false, reason: '未登入管理者' });
     const item = findItem(itemId);
     if (!item) return cb && cb({ ok: false, reason: '找不到項目' });
-    if (itemId === currentItemId) return cb && cb({ ok: false, reason: '這個項目正在開放中，無法修改（請先按取消）' });
+    if (buyerCount(itemId) > 0) return cb && cb({ ok: false, reason: '已經有人買了這個項目，無法再修改' });
 
     title = (title || '').toString().trim().slice(0, 60);
     const priceNum = Number(price);
@@ -198,12 +169,6 @@ io.on('connection', (socket) => {
     cb && cb({ ok: true });
   });
 
-  socket.on('admin:cancelItem', (_data, cb) => {
-    if (!socket.rooms.has('admins')) return cb && cb({ ok: false, reason: '未登入管理者' });
-    cancelCurrentItem();
-    cb && cb({ ok: true });
-  });
-
   socket.on('admin:endGame', (_data, cb) => {
     if (!socket.rooms.has('admins')) return cb && cb({ ok: false, reason: '未登入管理者' });
     gameEnded = true;
@@ -213,11 +178,7 @@ io.on('connection', (socket) => {
 
   socket.on('admin:resetGame', (_data, cb) => {
     if (!socket.rooms.has('admins')) return cb && cb({ ok: false, reason: '未登入管理者' });
-    currentItemId = null;
     gameEnded = false;
-    for (const item of allItems) {
-      item.opened = false;
-    }
     for (const p of players.values()) {
       p.balance = STARTING_BALANCE;
       p.purchases.clear();

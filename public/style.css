@@ -62,48 +62,40 @@ input {
 .balance-card .label { color: var(--muted); font-size: 14px; }
 .balance-card .value { font-size: 32px; font-weight: 800; color: var(--accent); }
 
-.item-title { font-size: 22px; font-weight: 800; line-height: 1.4; }
-.section-badge {
-  display: inline-block;
-  background: var(--panel-2);
-  color: var(--accent-2);
-  padding: 3px 10px;
-  border-radius: 999px;
-  font-size: 13px;
-  margin-bottom: 8px;
-}
-
-.price-row {
+.item-buy-row {
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  margin-top: 12px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #2a2f45;
 }
-.price-row .price { font-size: 40px; font-weight: 900; color: var(--accent); }
-.price-row .leader { color: var(--muted); font-size: 15px; }
-
-.stage-banner {
-  margin-top: 10px;
-  padding: 10px 14px;
-  border-radius: 10px;
-  font-weight: 800;
-  text-align: center;
-  font-size: 18px;
+.item-buy-row:last-child { border-bottom: none; }
+.item-thumb {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--panel-2);
 }
-.stage-0 { background: #2a2f45; color: var(--muted); }
-.stage-1 { background: #3a3418; color: var(--accent); }
-.stage-2 { background: #4a2e10; color: #ffb347; }
-.stage-3 { background: #123a24; color: var(--ok); }
-
-.buy-btn {
-  width: 100%;
-  margin-top: 16px;
-  padding: 16px;
-  font-size: 20px;
+.item-buy-info { flex: 1; min-width: 0; }
+.item-buy-title { font-size: 15px; font-weight: 700; }
+.item-buy-meta { font-size: 13px; color: var(--muted); margin-top: 2px; }
+.item-buy-btn {
+  flex-shrink: 0;
+  padding: 10px 18px;
+  font-size: 14px;
   background: var(--accent);
   color: #1a1a1a;
 }
-.buy-btn:disabled { background: #444; color: #888; cursor: not-allowed; }
+.item-buy-btn:disabled { background: #444; color: #888; cursor: not-allowed; }
+.item-buy-status {
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 14px;
+}
+.item-buy-status.bought { color: var(--ok); }
 
 .toast {
   margin-top: 8px;
@@ -130,8 +122,6 @@ input {
   color: #1a1a1a;
   font-size: 18px;
 }
-
-.idle-msg { text-align: center; color: var(--muted); padding: 30px 0; font-size: 17px; }
 
 /* ---------- Admin page ---------- */
 .admin-wrap { max-width: 1200px; margin: 0 auto; padding: 20px; }
@@ -176,13 +166,12 @@ input {
 .control-panel { display: flex; flex-direction: column; gap: 14px; }
 .control-panel .card { padding: 16px; }
 .control-panel button { padding: 12px; font-size: 15px; width: 100%; margin-top: 8px; }
-.btn-cancel { background: var(--danger); color: white; }
 .btn-end { background: var(--panel-2); color: var(--text); }
 .btn-reset { background: #444; color: #ddd; }
 
-.players-list { max-height: 260px; overflow-y: auto; font-size: 14px; }
-.player-row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #2a2f45; }
-.player-row .off { color: var(--muted); }
+.players-list { max-height: 320px; overflow-y: auto; font-size: 14px; }
+.player-row-detail { padding: 8px 0; border-bottom: 1px solid #2a2f45; }
+.player-row-detail .off { color: var(--muted); }
 
 /* ---------- Display page ---------- */
 .bg-layer {
@@ -196,31 +185,54 @@ input {
   transition: background-image 0.3s ease;
   z-index: 0;
 }
-.display-wrap {
+.stats-wrap {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  padding: 32px 48px;
+}
+.stats-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+.stats-title { font-size: 34px; font-weight: 900; text-shadow: 0 2px 12px rgba(0,0,0,0.6); }
+.stats-sub { font-size: 16px; color: var(--muted); margin-top: 4px; text-shadow: 0 2px 8px rgba(0,0,0,0.6); }
+.stats-qr { display: flex; align-items: center; gap: 12px; }
+.stats-qr img { background: white; padding: 6px; border-radius: 8px; }
+.stats-qr div { font-size: 13px; color: var(--muted); max-width: 140px; }
+
+.stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+.stats-col { background: rgba(28, 32, 48, 0.85); border-radius: 16px; padding: 18px 22px; }
+.stats-col h3 { font-size: 20px; color: var(--accent-2); margin-bottom: 12px; text-shadow: 0 2px 8px rgba(0,0,0,0.5); }
+.stats-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.stats-row:last-child { border-bottom: none; }
+.stats-item-title { flex: 1; font-size: 18px; font-weight: 700; }
+.stats-item-price { font-size: 15px; color: var(--muted); white-space: nowrap; }
+.stats-count {
+  font-size: 26px;
+  font-weight: 900;
+  color: var(--accent);
+  min-width: 50px;
+  text-align: right;
+}
+.stats-count small { font-size: 14px; font-weight: 400; color: var(--muted); margin-left: 2px; }
+
+#endView {
   position: relative;
   z-index: 1;
   min-height: 100vh;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  text-align: center;
-  padding: 40px;
 }
-.display-section { font-size: 28px; color: var(--accent-2); margin-bottom: 10px; text-shadow: 0 2px 12px rgba(0,0,0,0.6); }
-.display-title { font-size: 56px; font-weight: 900; max-width: 1100px; line-height: 1.4; margin-bottom: 40px; text-shadow: 0 4px 20px rgba(0,0,0,0.7); }
-.display-price { font-size: 130px; font-weight: 900; color: var(--accent); line-height: 1; text-shadow: 0 4px 24px rgba(0,0,0,0.7); }
-.display-price .unit { font-size: 48px; margin-left: 12px; }
-.display-leader { font-size: 32px; color: var(--muted); margin-top: 10px; text-shadow: 0 2px 12px rgba(0,0,0,0.6); }
-.display-stage {
-  margin-top: 40px;
-  font-size: 40px;
-  font-weight: 900;
-  padding: 16px 40px;
-  border-radius: 16px;
-}
-.display-idle { font-size: 40px; color: var(--muted); }
-
 .reveal-wrap { text-align: center; }
 .reveal-cross {
   font-size: 90px;

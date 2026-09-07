@@ -21,23 +21,23 @@
 
     <div class="control-panel">
       <div class="card">
-        <h3>目前狀態</h3>
-        <div id="curStatus">尚未開始</div>
-        <button class="btn-cancel" id="cancelBtn">關閉目前開放的項目</button>
+        <h3>遊戲控制</h3>
+        <div id="curStatus">遊戲進行中，玩家可以自由購買</div>
         <button class="btn-end" id="endBtn">結束整場遊戲（顯示結算）</button>
         <button class="btn-reset" id="resetBtn">重設整場遊戲（危險）</button>
       </div>
       <div class="card">
-        <h3>玩家籌碼 (<span id="playerCount">0</span>)</h3>
+        <h3>玩家名單 (<span id="playerCount">0</span>)</h3>
         <div class="players-list" id="playersList"></div>
       </div>
       <div class="card">
         <h3>提示</h3>
         <p style="color:var(--muted);font-size:13px;line-height:1.6">
-          點選左側任一項目即可開放給大家決定買不買，每個項目價格固定，玩家自己選擇要不要買。<br/>
+          玩家一進入遊戲就能看到全部11個項目自由購買，不需要管理者開放。<br/>
           同一個項目可以有很多人買（不是喊價競爭）。<br/>
-          點 ✎ 可以修改項目名稱和價格（項目正在開放中無法修改）。<br/>
-          全部項目跑完後，按「結束整場遊戲」，畫面會顯示「無法競標」結尾，接著手動切換到教會信息簡報。
+          點 ✎ 可以修改項目名稱和價格（已經有人買過就不能再改）。<br/>
+          全部人決定得差不多後，按「結束整場遊戲」，畫面會顯示「無法競標」結尾，
+          接著手動切換到教會信息簡報。
         </p>
       </div>
     </div>
@@ -53,7 +53,6 @@ const pwInput = document.getElementById('pwInput');
 const loginBtn = document.getElementById('loginBtn');
 const sectionsGrid = document.getElementById('sectionsGrid');
 const curStatus = document.getElementById('curStatus');
-const cancelBtn = document.getElementById('cancelBtn');
 const endBtn = document.getElementById('endBtn');
 const resetBtn = document.getElementById('resetBtn');
 const playersList = document.getElementById('playersList');
@@ -88,18 +87,12 @@ function render() {
 
       const btn = document.createElement('button');
       btn.className = 'item-btn';
-      if (item.active) btn.classList.add('active');
-      else if (item.opened) btn.classList.add('sold');
-      const status = item.active ? '開放中' : (item.opened ? '曾經開放過' : '尚未開始');
-      btn.innerHTML = `${item.title}<small>${item.price} 萬 · ${status} · ${item.buyerCount} 人已買</small>`;
-      btn.onclick = () => {
-        socket.emit('admin:startItem', item.id, (res) => {
-          if (!res.ok) alert(res.reason);
-        });
-      };
+      if (item.buyerCount > 0) btn.classList.add('sold');
+      btn.disabled = true;
+      btn.innerHTML = `${item.title}<small>${item.price} 萬 · ${item.buyerCount} 人已買</small>`;
       row.appendChild(btn);
 
-      if (!item.active) {
+      if (item.buyerCount === 0) {
         const editBtn = document.createElement('button');
         editBtn.className = 'edit-btn';
         editBtn.textContent = '✎';
@@ -125,25 +118,25 @@ function render() {
 socket.on('items:update', (data) => { latestItemsData = data; render(); });
 
 socket.on('state:update', (state) => {
-  if (state.gameEnded) {
-    curStatus.textContent = '遊戲已結束（顯示結算畫面）';
-    return;
-  }
-  if (!state.item) {
-    curStatus.textContent = '尚未開放項目';
-    return;
-  }
-  curStatus.innerHTML = `<b>${state.item.sectionTitle} - ${state.item.title}</b><br/>價格：${state.item.price} 萬｜已有 ${state.item.buyerCount} 人購買`;
+  curStatus.textContent = state.gameEnded ? '遊戲已結束（顯示結算畫面）' : '遊戲進行中，玩家可以自由購買';
 });
 
 socket.on('players:update', (list) => {
   playerCount.textContent = list.length;
-  playersList.innerHTML = list.map(p =>
-    `<div class="player-row"><span class="${p.connected ? '' : 'off'}">${p.name}${p.connected ? '' : '（離線）'}</span><span>${p.balance} 萬（已買${p.boughtCount}項）</span></div>`
-  ).join('');
+  playersList.innerHTML = list.map(p => {
+    const items = p.purchases.length > 0
+      ? p.purchases.map(x => x.title).join('、')
+      : '（尚未購買）';
+    return `<div class="player-row-detail">
+      <div style="display:flex;justify-content:space-between">
+        <span class="${p.connected ? '' : 'off'}">${p.name}${p.connected ? '' : '（離線）'}</span>
+        <span>${p.balance} 萬</span>
+      </div>
+      <div style="color:var(--muted);font-size:12px;margin-top:2px">${items}</div>
+    </div>`;
+  }).join('');
 });
 
-cancelBtn.onclick = () => socket.emit('admin:cancelItem', {}, () => {});
 endBtn.onclick = () => {
   if (confirm('確定要結束整場遊戲嗎？')) socket.emit('admin:endGame', {}, () => {});
 };

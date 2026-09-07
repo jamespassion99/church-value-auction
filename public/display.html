@@ -8,82 +8,71 @@
 </head>
 <body>
 <div class="bg-layer" id="bgLayer"></div>
-<div class="display-wrap" id="wrap">
-  <div id="idleView" class="display-idle">
-    <div id="idleWaiting" class="hidden">請等待主持人開放下一個項目...</div>
-    <div id="idleJoin">
-      <div style="font-size:32px;margin-bottom:20px">請掃描 QR Code 加入價值大拍賣</div>
-      <img id="qrImg" style="background:white;padding:12px;border-radius:12px" width="280" height="280" />
-      <div id="joinUrl" style="font-size:22px;color:var(--muted);margin-top:16px"></div>
+
+<div id="statsView" class="stats-wrap">
+  <div class="stats-header">
+    <div>
+      <div class="stats-title">價值大拍賣 · 即時統計</div>
+      <div class="stats-sub">每人 365 萬虛擬人生基金，同一項目可多人購買</div>
+    </div>
+    <div class="stats-qr">
+      <img id="qrImg" width="120" height="120" />
+      <div id="joinUrl"></div>
     </div>
   </div>
+  <div class="stats-grid" id="statsGrid"></div>
+</div>
 
-  <div id="itemView" class="hidden">
-    <div class="display-section" id="sectionLabel"></div>
-    <div class="display-title" id="titleLabel"></div>
-    <div class="display-price"><span id="priceLabel">0</span><span class="unit">萬</span></div>
-    <div class="display-leader" id="buyerCountLabel"></div>
-  </div>
-
-  <div id="endView" class="hidden">
-    <div class="reveal-wrap">
-      <div class="reveal-cross">✝</div>
-      <div class="reveal-title">無法競標</div>
-      <div class="reveal-sub">神的愛 · 救恩 · 神兒女的身份</div>
-    </div>
+<div id="endView" class="hidden">
+  <div class="reveal-wrap">
+    <div class="reveal-cross">✝</div>
+    <div class="reveal-title">無法競標</div>
+    <div class="reveal-sub">神的愛 · 救恩 · 神兒女的身份</div>
   </div>
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
 const socket = io();
-const bgLayer = document.getElementById('bgLayer');
-const idleView = document.getElementById('idleView');
-const itemView = document.getElementById('itemView');
+const statsView = document.getElementById('statsView');
 const endView = document.getElementById('endView');
-const sectionLabel = document.getElementById('sectionLabel');
-const titleLabel = document.getElementById('titleLabel');
-const priceLabel = document.getElementById('priceLabel');
-const buyerCountLabel = document.getElementById('buyerCountLabel');
-
-function setBg(imageId) {
-  bgLayer.style.backgroundImage = `url('/images/${imageId}.jpg')`;
-}
+const statsGrid = document.getElementById('statsGrid');
+const bgLayer = document.getElementById('bgLayer');
 
 const joinUrl = window.location.origin + '/';
 document.getElementById('joinUrl').textContent = joinUrl;
 document.getElementById('qrImg').src =
-  'https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=' + encodeURIComponent(joinUrl);
+  'https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=' + encodeURIComponent(joinUrl);
 
-let anyItemEverStarted = false;
+function renderStats(sections) {
+  statsGrid.innerHTML = sections.map(section => `
+    <div class="stats-col">
+      <h3>${section.title}</h3>
+      ${section.items.map(it => `
+        <div class="stats-row">
+          <span class="stats-item-title">${it.title}</span>
+          <span class="stats-item-price">${it.price}萬</span>
+          <span class="stats-count">${it.buyerCount}<small>人</small></span>
+        </div>
+      `).join('')}
+    </div>
+  `).join('');
+}
+
 socket.on('items:update', (sections) => {
-  const started = sections.some(s => s.items.some(it => it.opened));
-  if (started) anyItemEverStarted = true;
+  renderStats(sections);
 });
 
 socket.on('state:update', (state) => {
-  idleView.classList.add('hidden');
-  itemView.classList.add('hidden');
-  endView.classList.add('hidden');
-
   if (state.gameEnded) {
-    setBg('reveal');
+    statsView.classList.add('hidden');
     endView.classList.remove('hidden');
-    return;
+    bgLayer.style.backgroundImage = "url('/images/reveal.jpg')";
+  } else {
+    statsView.classList.remove('hidden');
+    endView.classList.add('hidden');
+    bgLayer.style.backgroundImage = "url('/images/intro.jpg')";
   }
-  if (!state.item) {
-    setBg('intro');
-    idleView.classList.remove('hidden');
-    document.getElementById('idleJoin').classList.toggle('hidden', anyItemEverStarted);
-    document.getElementById('idleWaiting').classList.toggle('hidden', !anyItemEverStarted);
-    return;
-  }
-  setBg(state.item.id);
-  itemView.classList.remove('hidden');
-  sectionLabel.textContent = state.item.sectionTitle;
-  titleLabel.textContent = state.item.title;
-  priceLabel.textContent = state.item.price;
-  buyerCountLabel.textContent = state.item.buyerCount > 0 ? `已有 ${state.item.buyerCount} 人購買` : '大家正在決定...';
 });
 </script>
 </body>

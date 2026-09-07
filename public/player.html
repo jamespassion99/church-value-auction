@@ -9,7 +9,15 @@
 <body>
 <div class="player-wrap">
 
-  <div id="joinScreen" class="card">
+  <div id="connectingScreen" class="card hidden">
+    <h2>連線中...</h2>
+    <p style="color:var(--muted)">正在重新連接遊戲伺服器，請稍候。</p>
+    <p id="connectingSlow" class="hidden" style="color:var(--muted);font-size:14px">
+      伺服器剛好在休眠中，喚醒可能需要 30-60 秒，請耐心等一下，不用重新整理。
+    </p>
+  </div>
+
+  <div id="joinScreen" class="card hidden">
     <h2>價值大拍賣</h2>
     <p style="color:var(--muted)">請輸入你的名字加入，每人 365 萬虛擬人生基金。</p>
     <div class="join-form">
@@ -27,26 +35,9 @@
       <div style="text-align:right;color:var(--muted)" id="playerNameLabel"></div>
     </div>
 
-    <div class="card" id="itemCard">
-      <div id="idleMsg" class="idle-msg">請等待主持人開放下一個項目...</div>
-      <div id="itemBody" class="hidden">
-        <span class="section-badge" id="sectionBadge"></span>
-        <div class="item-title" id="itemTitle"></div>
-        <div class="price-row">
-          <div class="price"><span id="priceValue">0</span> 萬</div>
-          <div class="leader" id="buyerCountLabel"></div>
-        </div>
+    <div id="sectionsWrap"></div>
 
-        <button id="buyBtn" class="buy-btn">購買</button>
-        <div id="alreadyBought" class="stage-banner stage-3 hidden">你已經買了這個項目 ✓</div>
-        <div id="toast" class="toast hidden"></div>
-      </div>
-    </div>
-
-    <div class="card" id="myListCard">
-      <h3 style="font-size:16px;color:var(--muted)">我已經購買的項目</h3>
-      <div id="myList" style="color:var(--muted);font-size:14px">目前還沒有購買任何項目</div>
-    </div>
+    <div id="toast" class="toast hidden"></div>
   </div>
 
   <div id="endScreen" class="hidden">
@@ -67,7 +58,11 @@ const socket = io();
 let playerId = localStorage.getItem('cav_playerId') || null;
 let myName = localStorage.getItem('cav_name') || '';
 let myPurchases = [];
+let latestSections = [];
+let gameEnded = false;
 
+const connectingScreen = document.getElementById('connectingScreen');
+const connectingSlow = document.getElementById('connectingSlow');
 const joinScreen = document.getElementById('joinScreen');
 const gameScreen = document.getElementById('gameScreen');
 const endScreen = document.getElementById('endScreen');
@@ -75,20 +70,19 @@ const nameInput = document.getElementById('nameInput');
 const joinBtn = document.getElementById('joinBtn');
 const balanceValue = document.getElementById('balanceValue');
 const playerNameLabel = document.getElementById('playerNameLabel');
-const idleMsg = document.getElementById('idleMsg');
-const itemBody = document.getElementById('itemBody');
-const sectionBadge = document.getElementById('sectionBadge');
-const itemTitle = document.getElementById('itemTitle');
-const priceValue = document.getElementById('priceValue');
-const buyerCountLabel = document.getElementById('buyerCountLabel');
-const buyBtn = document.getElementById('buyBtn');
-const alreadyBought = document.getElementById('alreadyBought');
+const sectionsWrap = document.getElementById('sectionsWrap');
 const toast = document.getElementById('toast');
-const myList = document.getElementById('myList');
 
 function doJoin(name) {
+  clearTimeout(doJoin._slowTimer);
+  doJoin._slowTimer = setTimeout(() => connectingSlow.classList.remove('hidden'), 6000);
+
   socket.emit('player:join', { playerId, name }, (res) => {
+    clearTimeout(doJoin._slowTimer);
+    connectingSlow.classList.add('hidden');
     if (!res.ok) {
+      connectingScreen.classList.add('hidden');
+      joinScreen.classList.remove('hidden');
       alert(res.reason || '加入失敗');
       return;
     }
@@ -99,9 +93,14 @@ function doJoin(name) {
     localStorage.setItem('cav_name', myName);
     balanceValue.textContent = res.balance;
     playerNameLabel.textContent = myName;
+    connectingScreen.classList.add('hidden');
     joinScreen.classList.add('hidden');
-    gameScreen.classList.remove('hidden');
-    renderMyList();
+    if (gameEnded) {
+      showEndScreen();
+    } else {
+      gameScreen.classList.remove('hidden');
+    }
+    renderSections();
   });
 }
 
@@ -110,10 +109,14 @@ joinBtn.onclick = () => {
   if (!name) return alert('請輸入名字');
   doJoin(name);
 };
+nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') joinBtn.click(); });
 
 if (playerId && myName) {
+  connectingScreen.classList.remove('hidden');
   nameInput.value = myName;
   doJoin(myName);
+} else {
+  joinScreen.classList.remove('hidden');
 }
 
 function showToast(msg, ok) {
@@ -121,68 +124,69 @@ function showToast(msg, ok) {
   toast.className = 'toast' + (ok ? ' ok' : '');
   toast.classList.remove('hidden');
   clearTimeout(showToast._t);
-  showToast._t = setTimeout(() => toast.classList.add('hidden'), 3500);
+  showToast._t = setTimeout(() => toast.classList.add('hidden'), 3000);
 }
 
-function renderMyList() {
-  if (myPurchases.length === 0) {
-    myList.textContent = '目前還沒有購買任何項目';
-    return;
-  }
-  myList.innerHTML = myPurchases.map(p =>
-    `<div style="display:flex;justify-content:space-between;padding:4px 0">
-      <span>${p.title}</span><span style="color:var(--accent)">${p.price} 萬</span>
-    </div>`
-  ).join('');
+function hasBought(itemId) {
+  return myPurchases.some(p => p.itemId === itemId);
 }
 
-let currentItemId = null;
-
-buyBtn.onclick = () => {
-  if (!currentItemId) return;
-  buyBtn.disabled = true;
-  socket.emit('item:buy', { itemId: currentItemId }, (res) => {
+function buyItem(itemId, btn) {
+  btn.disabled = true;
+  socket.emit('item:buy', { itemId }, (res) => {
     if (res.ok) {
       balanceValue.textContent = res.balance;
       showToast('購買成功！', true);
+      const item = findItemLocal(itemId);
+      if (item) myPurchases.push({ itemId, title: item.title, price: item.price, sectionTitle: item.sectionTitle });
+      renderSections();
     } else {
-      buyBtn.disabled = false;
+      btn.disabled = false;
       showToast(res.reason || '購買失敗', false);
     }
   });
-};
+}
 
-socket.on('state:update', (state) => {
-  if (state.gameEnded) {
-    gameScreen.classList.add('hidden');
-    endScreen.classList.remove('hidden');
-    document.getElementById('endBalance').textContent = balanceValue.textContent;
-    renderWonList();
-    return;
+function findItemLocal(itemId) {
+  for (const s of latestSections) {
+    const it = s.items.find(i => i.id === itemId);
+    if (it) return { ...it, sectionTitle: s.title };
   }
-  if (!state.item) {
-    currentItemId = null;
-    idleMsg.classList.remove('hidden');
-    itemBody.classList.add('hidden');
-    return;
-  }
-  currentItemId = state.item.id;
-  idleMsg.classList.add('hidden');
-  itemBody.classList.remove('hidden');
-  sectionBadge.textContent = state.item.sectionTitle;
-  itemTitle.textContent = state.item.title;
-  priceValue.textContent = state.item.price;
-  buyerCountLabel.textContent = state.item.buyerCount > 0 ? `已有 ${state.item.buyerCount} 人購買` : '';
+  return null;
+}
 
-  const alreadyHas = myPurchases.some(p => p.itemId === currentItemId);
-  const canAfford = Number(balanceValue.textContent) >= state.item.price;
-  buyBtn.classList.toggle('hidden', alreadyHas);
-  alreadyBought.classList.toggle('hidden', !alreadyHas);
-  buyBtn.disabled = !canAfford;
-  buyBtn.textContent = canAfford ? `購買（${state.item.price} 萬）` : `籌碼不足（需要 ${state.item.price} 萬）`;
-});
+function renderSections() {
+  sectionsWrap.innerHTML = latestSections.map(section => `
+    <div class="card">
+      <h3 style="color:var(--accent-2);font-size:16px">${section.title}</h3>
+      ${section.items.map(it => {
+        const bought = hasBought(it.id);
+        const canAfford = Number(balanceValue.textContent) >= it.price;
+        return `
+        <div class="item-buy-row">
+          <img class="item-thumb" src="/images/${it.id}.jpg" />
+          <div class="item-buy-info">
+            <div class="item-buy-title">${it.title}</div>
+            <div class="item-buy-meta">${it.price} 萬${it.buyerCount > 0 ? ` · 已有 ${it.buyerCount} 人買` : ''}</div>
+          </div>
+          ${bought
+            ? `<div class="item-buy-status bought">已購買 ✓</div>`
+            : `<button class="item-buy-btn" data-id="${it.id}" ${!canAfford ? 'disabled' : ''}>${canAfford ? '購買' : '不足'}</button>`
+          }
+        </div>`;
+      }).join('')}
+    </div>
+  `).join('');
 
-function renderWonList() {
+  sectionsWrap.querySelectorAll('.item-buy-btn').forEach(btn => {
+    btn.onclick = () => buyItem(btn.dataset.id, btn);
+  });
+}
+
+function showEndScreen() {
+  gameScreen.classList.add('hidden');
+  endScreen.classList.remove('hidden');
+  document.getElementById('endBalance').textContent = balanceValue.textContent;
   const wonList = document.getElementById('wonList');
   if (myPurchases.length === 0) {
     wonList.innerHTML = '<p style="color:var(--muted)">這次沒有購買任何項目</p>';
@@ -195,14 +199,29 @@ function renderWonList() {
   }
 }
 
+socket.on('items:update', (sections) => {
+  latestSections = sections;
+  if (!gameScreen.classList.contains('hidden')) renderSections();
+});
+
+socket.on('state:update', (state) => {
+  gameEnded = state.gameEnded;
+  const alreadyJoined = playerId && !gameScreen.classList.contains('hidden');
+  if (gameEnded && alreadyJoined) {
+    showEndScreen();
+  }
+});
+
 // 定期校正籌碼與已購清單（伺服器沒有主動推送個人資料變化）
 setInterval(() => {
-  if (playerId && myName) {
+  const isConnecting = !connectingScreen.classList.contains('hidden');
+  if (playerId && myName && !isConnecting) {
     socket.emit('player:join', { playerId, name: myName }, (res) => {
       if (res.ok) {
         balanceValue.textContent = res.balance;
         myPurchases = res.purchases || [];
-        renderMyList();
+        if (gameEnded) showEndScreen();
+        else renderSections();
       }
     });
   }
