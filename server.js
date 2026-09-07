@@ -243,6 +243,18 @@ io.on('connection', (socket) => {
     cb && cb(startItem(itemId));
   });
 
+  socket.on('admin:updateItem', ({ itemId, title }, cb) => {
+    if (!socket.rooms.has('admins')) return cb && cb({ ok: false, reason: '未登入管理者' });
+    const item = findItem(itemId);
+    if (!item) return cb && cb({ ok: false, reason: '找不到題目' });
+    if (item.status !== 'pending') return cb && cb({ ok: false, reason: '這一題已經開標或售出，無法修改文字（可先取消流標再修改）' });
+    title = (title || '').toString().trim().slice(0, 60);
+    if (!title) return cb && cb({ ok: false, reason: '題目文字不能空白' });
+    item.title = title;
+    broadcastState();
+    cb && cb({ ok: true });
+  });
+
   socket.on('admin:cancelItem', (_data, cb) => {
     if (!socket.rooms.has('admins')) return cb && cb({ ok: false, reason: '未登入管理者' });
     cancelCurrentItem();

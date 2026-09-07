@@ -84,6 +84,9 @@ function render() {
     h3.textContent = section.title;
     col.appendChild(h3);
     for (const item of section.items) {
+      const row = document.createElement('div');
+      row.className = 'item-row';
+
       const btn = document.createElement('button');
       btn.className = 'item-btn';
       if (item.status === 'sold') btn.classList.add('sold');
@@ -98,7 +101,24 @@ function render() {
           if (!res.ok) alert(res.reason);
         });
       };
-      col.appendChild(btn);
+      row.appendChild(btn);
+
+      if (item.status === 'pending') {
+        const editBtn = document.createElement('button');
+        editBtn.className = 'edit-btn';
+        editBtn.textContent = '✎';
+        editBtn.title = '修改題目文字';
+        editBtn.onclick = () => {
+          const newTitle = prompt('修改題目文字：', item.title);
+          if (newTitle === null) return;
+          socket.emit('admin:updateItem', { itemId: item.id, title: newTitle }, (res) => {
+            if (!res.ok) alert(res.reason);
+          });
+        };
+        row.appendChild(editBtn);
+      }
+
+      col.appendChild(row);
     }
     sectionsGrid.appendChild(col);
   }

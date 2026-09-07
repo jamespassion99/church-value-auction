@@ -172,6 +172,16 @@ input {
 .item-btn.active { background: var(--accent); color: #1a1a1a; }
 .item-btn small { display: block; font-weight: 400; opacity: 0.8; margin-top: 3px; }
 
+.item-row { display: flex; gap: 6px; margin-bottom: 8px; align-items: stretch; }
+.item-row .item-btn { margin-bottom: 0; }
+.edit-btn {
+  flex-shrink: 0;
+  width: 36px;
+  background: var(--panel-2);
+  color: var(--accent-2);
+  font-size: 16px;
+}
+
 .control-panel { display: flex; flex-direction: column; gap: 14px; }
 .control-panel .card { padding: 16px; }
 .control-panel button { padding: 12px; font-size: 15px; width: 100%; margin-top: 8px; }
