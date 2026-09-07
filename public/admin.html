@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>管理者控制台 - 價值觀競標遊戲</title>
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+
+<div id="loginScreen" class="admin-login card">
+  <h2>管理者登入</h2>
+  <input id="pwInput" type="password" placeholder="請輸入管理者密碼" />
+  <button id="loginBtn">登入</button>
+</div>
+
+<div id="adminScreen" class="admin-wrap hidden">
+  <h2>競標控制台</h2>
+  <div class="admin-grid">
+    <div class="sections-grid" id="sectionsGrid"></div>
+
+    <div class="control-panel">
+      <div class="card">
+        <h3>目前狀態</h3>
+        <div id="curStatus">尚未開始</div>
+        <button class="btn-cancel" id="cancelBtn">取消 / 流標目前題目</button>
+        <button class="btn-end" id="endBtn">結束整場遊戲（顯示結算）</button>
+        <button class="btn-reset" id="resetBtn">重設整場遊戲（危險）</button>
+      </div>
+      <div class="card">
+        <h3>玩家籌碼 (<span id="playerCount">0</span>)</h3>
+        <div class="players-list" id="playersList"></div>
+      </div>
+      <div class="card">
+        <h3>提示</h3>
+        <p style="color:var(--muted);font-size:13px;line-height:1.6">
+          點選左側任一「未開始」的題目即可開始競標。<br/>
+          玩家喊價後，系統會自動跑：3秒→第一次，再7秒→第二次，再15秒→第三次成交。<br/>
+          若中途有人加價會重新從第一次開始算。<br/>
+          全部題目跑完後，按「結束整場遊戲」，接著手動切換到教會信息簡報。
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const socket = io();
+const loginScreen = document.getElementById('loginScreen');
+const adminScreen = document.getElementById('adminScreen');
+const pwInput = document.getElementById('pwInput');
+const loginBtn = document.getElementById('loginBtn');
+const sectionsGrid = document.getElementById('sectionsGrid');
+const curStatus = document.getElementById('curStatus');
+const cancelBtn = document.getElementById('cancelBtn');
+const endBtn = document.getElementById('endBtn');
+const resetBtn = document.getElementById('resetBtn');
+const playersList = document.getElementById('playersList');
+const playerCount = document.getElementById('playerCount');
+
+loginBtn.onclick = () => {
+  socket.emit('admin:login', pwInput.value, (res) => {
+    if (res.ok) {
+      loginScreen.classList.add('hidden');
+      adminScreen.classList.remove('hidden');
+    } else {
+      alert(res.reason || '登入失敗');
+    }
+  });
+};
+pwInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') loginBtn.click(); });
+
+let latestItemsData = null;
+let latestState = null;
+
+function render() {
+  if (!latestItemsData) return;
+  sectionsGrid.innerHTML = '';
+  for (const section of latestItemsData) {
+    const col = document.createElement('div');
+    col.className = 'section-col';
+    const h3 = document.createElement('h3');
+    h3.textContent = section.title;
+    col.appendChild(h3);
+    for (const item of section.items) {
+      const btn = document.createElement('button');
+      btn.className = 'item-btn';
+      if (item.status === 'sold') btn.classList.add('sold');
+      if (item.status === 'active') btn.classList.add('active');
+      let extra = '';
+      if (item.status === 'sold') extra = `<small>已售出 - ${item.winnerName} - ${item.soldPrice} 萬</small>`;
+      else if (item.status === 'active') extra = `<small>競標中</small>`;
+      else extra = `<small>尚未開始</small>`;
+      btn.innerHTML = `${item.title}${extra}`;
+      btn.onclick = () => {
+        socket.emit('admin:startItem', item.id, (res) => {
+          if (!res.ok) alert(res.reason);
+        });
+      };
+      col.appendChild(btn);
+    }
+    sectionsGrid.appendChild(col);
+  }
+}
+
+socket.on('items:update', (data) => { latestItemsData = data; render(); });
+
+socket.on('state:update', (state) => {
+  latestState = state;
+  if (state.gameEnded) {
+    curStatus.textContent = '遊戲已結束（顯示結算畫面）';
+    return;
+  }
+  if (!state.item) {
+    curStatus.textContent = '尚未選題';
+    return;
+  }
+  const stageText = ['競標中', '第一次', '第二次', '第三次成交'];
+  curStatus.innerHTML = `<b>${state.item.sectionTitle} - ${state.item.title}</b><br/>價格：${state.price} 萬｜最高：${state.leaderName || '無'}｜${stageText[state.callStage]}`;
+});
+
+socket.on('players:update', (list) => {
+  playerCount.textContent = list.length;
+  playersList.innerHTML = list.map(p =>
+    `<div class="player-row"><span class="${p.connected ? '' : 'off'}">${p.name}${p.connected ? '' : '（離線）'}</span><span>${p.balance} 萬</span></div>`
+  ).join('');
+});
+
+cancelBtn.onclick = () => socket.emit('admin:cancelItem', {}, () => {});
+endBtn.onclick = () => {
+  if (confirm('確定要結束整場遊戲嗎？')) socket.emit('admin:endGame', {}, () => {});
+};
+resetBtn.onclick = () => {
+  if (confirm('確定要重設整場遊戲嗎？所有籌碼與題目狀態都會清空！')) socket.emit('admin:resetGame', {}, () => {});
+};
+</script>
+</body>
+</html>

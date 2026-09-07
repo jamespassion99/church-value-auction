@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>價值觀競標遊戲</title>
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<div class="player-wrap">
+
+  <div id="joinScreen" class="card">
+    <h2>價值觀競標遊戲</h2>
+    <p style="color:var(--muted)">請輸入你的名字加入競標，每人籌碼 365 萬。</p>
+    <div class="join-form">
+      <input id="nameInput" maxlength="20" placeholder="輸入你的名字" />
+      <button id="joinBtn">加入遊戲</button>
+    </div>
+  </div>
+
+  <div id="gameScreen" class="hidden">
+    <div class="balance-card card">
+      <div>
+        <div class="label">我的籌碼</div>
+        <div class="value"><span id="balanceValue">365</span> 萬</div>
+      </div>
+      <div style="text-align:right;color:var(--muted)" id="playerNameLabel"></div>
+    </div>
+
+    <div class="card" id="itemCard">
+      <div id="idleMsg" class="idle-msg">請等待主持人出題...</div>
+      <div id="itemBody" class="hidden">
+        <span class="section-badge" id="sectionBadge"></span>
+        <div class="item-title" id="itemTitle"></div>
+        <div class="price-row">
+          <div class="price"><span id="priceValue">0</span> 萬</div>
+          <div class="leader" id="leaderLabel">尚無人出價</div>
+        </div>
+        <div class="stage-banner stage-0" id="stageBanner">競標中</div>
+
+        <div class="bid-form">
+          <input id="bidInput" type="number" inputmode="numeric" min="1" step="1" placeholder="輸入萬元數字" />
+          <button id="bidBtn">喊價</button>
+        </div>
+        <div id="toast" class="toast hidden"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="endScreen" class="card hidden">
+    <h2>競標結束</h2>
+    <p style="color:var(--muted)">謝謝大家的參與，請留意主持人接下來的分享。</p>
+  </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const socket = io();
+let playerId = localStorage.getItem('cav_playerId') || null;
+let myName = localStorage.getItem('cav_name') || '';
+
+const joinScreen = document.getElementById('joinScreen');
+const gameScreen = document.getElementById('gameScreen');
+const endScreen = document.getElementById('endScreen');
+const nameInput = document.getElementById('nameInput');
+const joinBtn = document.getElementById('joinBtn');
+const balanceValue = document.getElementById('balanceValue');
+const playerNameLabel = document.getElementById('playerNameLabel');
+const idleMsg = document.getElementById('idleMsg');
+const itemBody = document.getElementById('itemBody');
+const sectionBadge = document.getElementById('sectionBadge');
+const itemTitle = document.getElementById('itemTitle');
+const priceValue = document.getElementById('priceValue');
+const leaderLabel = document.getElementById('leaderLabel');
+const stageBanner = document.getElementById('stageBanner');
+const bidInput = document.getElementById('bidInput');
+const bidBtn = document.getElementById('bidBtn');
+const toast = document.getElementById('toast');
+
+let isLeader = false;
+
+function doJoin(name) {
+  socket.emit('player:join', { playerId, name }, (res) => {
+    if (!res.ok) {
+      alert(res.reason || '加入失敗');
+      return;
+    }
+    playerId = res.playerId;
+    myName = res.name;
+    localStorage.setItem('cav_playerId', playerId);
+    localStorage.setItem('cav_name', myName);
+    balanceValue.textContent = res.balance;
+    playerNameLabel.textContent = myName;
+    joinScreen.classList.add('hidden');
+    gameScreen.classList.remove('hidden');
+  });
+}
+
+joinBtn.onclick = () => {
+  const name = nameInput.value.trim();
+  if (!name) return alert('請輸入名字');
+  doJoin(name);
+};
+
+if (playerId && myName) {
+  nameInput.value = myName;
+  doJoin(myName);
+}
+
+function showToast(msg, ok) {
+  toast.textContent = msg;
+  toast.className = 'toast' + (ok ? ' ok' : '');
+  toast.classList.remove('hidden');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => toast.classList.add('hidden'), 3500);
+}
+
+bidBtn.onclick = () => {
+  const amount = parseInt(bidInput.value, 10);
+  if (!amount || amount <= 0) return showToast('請輸入正確的萬元數字', false);
+  bidBtn.disabled = true;
+  socket.emit('bid:submit', { amount }, (res) => {
+    bidBtn.disabled = false;
+    if (res.ok) {
+      bidInput.value = '';
+      showToast('喊價成功！', true);
+    } else {
+      showToast(res.reason || '喊價失敗', false);
+    }
+  });
+};
+
+bidInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') bidBtn.click();
+});
+
+const stageText = ['競標中', '第一次', '第二次', '第三次成交'];
+
+socket.on('state:update', (state) => {
+  if (state.gameEnded) {
+    gameScreen.classList.add('hidden');
+    endScreen.classList.remove('hidden');
+    return;
+  }
+  if (!state.item) {
+    idleMsg.classList.remove('hidden');
+    itemBody.classList.add('hidden');
+    return;
+  }
+  idleMsg.classList.add('hidden');
+  itemBody.classList.remove('hidden');
+  sectionBadge.textContent = state.item.sectionTitle;
+  itemTitle.textContent = state.item.title;
+  priceValue.textContent = state.price;
+  leaderLabel.textContent = state.leaderName ? `目前最高：${state.leaderName}` : '尚無人出價';
+  stageBanner.textContent = state.status === 'sold' ? `${state.price} 萬 - 成交！得標者：${state.leaderName}` : stageText[state.callStage];
+  stageBanner.className = 'stage-banner stage-' + state.callStage;
+
+  isLeader = state.leaderName === myName;
+  const canBid = state.status === 'bidding' && !isLeader;
+  bidBtn.disabled = !canBid;
+  bidInput.disabled = !canBid;
+
+  if (state.status === 'sold' && playerId) {
+    // 若我是得標者，畫面上的籌碼稍後由伺服器下一次 join 校正；這裡先不主動猜測扣款金額
+  }
+});
+
+// 定期詢問餘額（伺服器沒有主動推送個人餘額變化，簡單用 rejoin 校正）
+setInterval(() => {
+  if (playerId && myName) {
+    socket.emit('player:join', { playerId, name: myName }, (res) => {
+      if (res.ok) balanceValue.textContent = res.balance;
+    });
+  }
+}, 4000);
+</script>
+</body>
+</html>

@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>投影畫面 - 價值觀競標遊戲</title>
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<div class="display-wrap" id="wrap">
+  <div id="idleView" class="display-idle">
+    <div id="idleWaiting" class="hidden">請等待主持人出題...</div>
+    <div id="idleJoin">
+      <div style="font-size:32px;margin-bottom:20px">請掃描 QR Code 加入競標遊戲</div>
+      <img id="qrImg" style="background:white;padding:12px;border-radius:12px" width="280" height="280" />
+      <div id="joinUrl" style="font-size:22px;color:var(--muted);margin-top:16px"></div>
+    </div>
+  </div>
+
+  <div id="itemView" class="hidden">
+    <div class="display-section" id="sectionLabel"></div>
+    <div class="display-title" id="titleLabel"></div>
+    <div class="display-price"><span id="priceLabel">0</span><span class="unit">萬</span></div>
+    <div class="display-leader" id="leaderLabel"></div>
+    <div class="display-stage stage-0" id="stageLabel">競標中</div>
+  </div>
+
+  <div id="endView" class="display-end hidden">
+    競標結束<br/>接下來請大家一同進入今天的信息分享
+  </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const socket = io();
+const idleView = document.getElementById('idleView');
+const itemView = document.getElementById('itemView');
+const endView = document.getElementById('endView');
+const sectionLabel = document.getElementById('sectionLabel');
+const titleLabel = document.getElementById('titleLabel');
+const priceLabel = document.getElementById('priceLabel');
+const leaderLabel = document.getElementById('leaderLabel');
+const stageLabel = document.getElementById('stageLabel');
+
+const stageText = ['競標中', '第一次', '第二次', '第三次成交！'];
+
+const joinUrl = window.location.origin + '/';
+document.getElementById('joinUrl').textContent = joinUrl;
+document.getElementById('qrImg').src =
+  'https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=' + encodeURIComponent(joinUrl);
+
+let anyItemEverStarted = false;
+socket.on('items:update', (sections) => {
+  const started = sections.some(s => s.items.some(it => it.status !== 'pending'));
+  if (started) anyItemEverStarted = true;
+});
+
+socket.on('state:update', (state) => {
+  idleView.classList.add('hidden');
+  itemView.classList.add('hidden');
+  endView.classList.add('hidden');
+
+  if (state.gameEnded) {
+    endView.classList.remove('hidden');
+    return;
+  }
+  if (!state.item) {
+    idleView.classList.remove('hidden');
+    document.getElementById('idleJoin').classList.toggle('hidden', anyItemEverStarted);
+    document.getElementById('idleWaiting').classList.toggle('hidden', !anyItemEverStarted);
+    return;
+  }
+  itemView.classList.remove('hidden');
+  sectionLabel.textContent = state.item.sectionTitle;
+  titleLabel.textContent = state.item.title;
+  priceLabel.textContent = state.price;
+  leaderLabel.textContent = state.leaderName ? `目前最高出價：${state.leaderName}` : '尚無人出價';
+  stageLabel.textContent = state.status === 'sold'
+    ? `成交！得標者：${state.leaderName}（${state.price} 萬）`
+    : stageText[state.callStage];
+  stageLabel.className = 'display-stage stage-' + state.callStage;
+});
+</script>
+</body>
+</html>
