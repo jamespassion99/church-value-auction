@@ -75,6 +75,7 @@ function playersSummary() {
     name: p.name,
     balance: p.balance,
     connected: p.connected,
+    confirmed: p.confirmed,
     purchases: playerPurchases(p)
   }));
 }
@@ -85,19 +86,26 @@ function broadcastState() {
   io.to('admins').emit('players:update', playersSummary());
 }
 
-function buyItem(playerId, itemId) {
+function confirmPurchases(playerId, itemIds) {
   if (!players.has(playerId)) return { ok: false, reason: '找不到玩家，請重新加入' };
-  const item = findItem(itemId);
-  if (!item) return { ok: false, reason: '找不到項目' };
-
   const player = players.get(playerId);
-  if (player.purchases.has(itemId)) return { ok: false, reason: '你已經買過這個項目了' };
-  if (player.balance < item.price) return { ok: false, reason: `籌碼不足，你剩下 ${player.balance} 萬` };
+  if (player.confirmed) return { ok: false, reason: '你已經送出過選擇了，無法再修改' };
 
-  player.balance -= item.price;
-  player.purchases.set(itemId, item.price);
+  const ids = Array.from(new Set((itemIds || []).map(String)));
+  const items = [];
+  for (const id of ids) {
+    const item = findItem(id);
+    if (!item) return { ok: false, reason: '找不到項目：' + id };
+    items.push(item);
+  }
+  const total = items.reduce((sum, it) => sum + it.price, 0);
+  if (total > player.balance) return { ok: false, reason: `籌碼不足，這些項目共需 ${total} 萬，你只剩 ${player.balance} 萬` };
+
+  for (const item of items) player.purchases.set(item.id, item.price);
+  player.balance -= total;
+  player.confirmed = true;
   broadcastState();
-  return { ok: true, balance: player.balance };
+  return { ok: true, balance: player.balance, confirmed: true, purchases: playerPurchases(player) };
 }
 
 const app = express();
@@ -122,7 +130,7 @@ io.on('connection', (socket) => {
 
     if (!player) {
       id = crypto.randomUUID();
-      player = { name, balance: STARTING_BALANCE, socketId: socket.id, connected: true, purchases: new Map() };
+      player = { name, balance: STARTING_BALANCE, socketId: socket.id, connected: true, confirmed: false, purchases: new Map() };
       players.set(id, player);
     } else {
       player.name = name;
@@ -132,14 +140,14 @@ io.on('connection', (socket) => {
 
     socket.data.playerId = id;
     socket.join('players');
-    cb && cb({ ok: true, playerId: id, name: player.name, balance: player.balance, purchases: playerPurchases(player) });
+    cb && cb({ ok: true, playerId: id, name: player.name, balance: player.balance, confirmed: player.confirmed, purchases: playerPurchases(player) });
     io.to('admins').emit('players:update', playersSummary());
   });
 
-  socket.on('item:buy', ({ itemId }, cb) => {
+  socket.on('player:confirmPurchases', ({ itemIds }, cb) => {
     const playerId = socket.data.playerId;
     if (!playerId) return cb && cb({ ok: false, reason: '請先加入遊戲' });
-    cb && cb(buyItem(playerId, itemId));
+    cb && cb(confirmPurchases(playerId, itemIds));
   });
 
   socket.on('admin:login', (password, cb) => {
@@ -181,6 +189,7 @@ io.on('connection', (socket) => {
     gameEnded = false;
     for (const p of players.values()) {
       p.balance = STARTING_BALANCE;
+      p.confirmed = false;
       p.purchases.clear();
     }
     broadcastState();

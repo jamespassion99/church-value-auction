@@ -40,17 +40,17 @@ input {
 .player-wrap {
   max-width: 480px;
   margin: 0 auto;
-  padding: 16px;
+  padding: 12px;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
 }
 
 .card {
   background: var(--panel);
   border-radius: 16px;
-  padding: 18px;
+  padding: 14px;
 }
 
 .balance-card {
@@ -62,40 +62,88 @@ input {
 .balance-card .label { color: var(--muted); font-size: 14px; }
 .balance-card .value { font-size: 32px; font-weight: 800; color: var(--accent); }
 
+.items-card { padding: 14px 16px; }
+.section-title {
+  color: var(--accent-2);
+  font-size: 14px;
+  margin: 14px 0 4px;
+}
+.section-title:first-child { margin-top: 0; }
+
 .item-buy-row {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 0;
+  gap: 10px;
+  padding: 7px 4px;
   border-bottom: 1px solid #2a2f45;
+  border-radius: 8px;
+  margin: 0 -4px;
 }
 .item-buy-row:last-child { border-bottom: none; }
+.item-buy-row.selectable { cursor: pointer; }
+.item-buy-row.selected { background: rgba(242, 183, 5, 0.12); }
+.item-buy-row.bought-locked { opacity: 0.75; }
 .item-thumb {
-  width: 48px;
-  height: 48px;
+  width: 40px;
+  height: 40px;
   border-radius: 8px;
   object-fit: cover;
   flex-shrink: 0;
   background: var(--panel-2);
 }
 .item-buy-info { flex: 1; min-width: 0; }
-.item-buy-title { font-size: 15px; font-weight: 700; }
-.item-buy-meta { font-size: 13px; color: var(--muted); margin-top: 2px; }
-.item-buy-btn {
-  flex-shrink: 0;
-  padding: 10px 18px;
-  font-size: 14px;
-  background: var(--accent);
-  color: #1a1a1a;
-}
-.item-buy-btn:disabled { background: #444; color: #888; cursor: not-allowed; }
+.item-buy-title { font-size: 14px; font-weight: 700; }
+.item-buy-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
 .item-buy-status {
   flex-shrink: 0;
   font-size: 13px;
   font-weight: 700;
-  padding: 8px 14px;
+  padding: 4px 10px;
+  border-radius: 8px;
 }
-.item-buy-status.bought { color: var(--ok); }
+.item-buy-status.locked { color: var(--ok); }
+.item-buy-status.selected { color: #1a1a1a; background: var(--accent); }
+.item-buy-status.not-selected { color: var(--muted); font-weight: 400; }
+
+/* ---------- Selection bar (bottom cart) ---------- */
+.selection-bar {
+  position: sticky;
+  bottom: 0;
+  border: 2px solid var(--panel-2);
+}
+.selection-title { font-size: 14px; font-weight: 700; color: var(--accent-2); margin-bottom: 6px; }
+.selected-chip-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 0;
+  font-size: 14px;
+  border-bottom: 1px solid #2a2f45;
+}
+.selected-chip-row:last-of-type { border-bottom: none; }
+.selected-chip-right { display: flex; align-items: center; gap: 8px; }
+.chip-remove {
+  padding: 4px 10px;
+  font-size: 12px;
+  background: var(--panel-2);
+  color: var(--danger);
+}
+.selection-total {
+  margin-top: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+.selection-total.over { color: var(--danger); }
+.confirm-btn {
+  width: 100%;
+  margin-top: 10px;
+  padding: 12px;
+  font-size: 15px;
+  background: var(--accent);
+  color: #1a1a1a;
+}
+.confirm-btn:disabled { background: #444; color: #888; cursor: not-allowed; }
 
 .toast {
   margin-top: 8px;

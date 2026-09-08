@@ -37,6 +37,8 @@
 
     <div id="sectionsWrap"></div>
 
+    <div id="selectionBar" class="card selection-bar"></div>
+
     <div id="toast" class="toast hidden"></div>
   </div>
 
@@ -58,6 +60,8 @@ const socket = io();
 let playerId = localStorage.getItem('cav_playerId') || null;
 let myName = localStorage.getItem('cav_name') || '';
 let myPurchases = [];
+let myConfirmed = false;
+let mySelections = new Set();
 let latestSections = [];
 let gameEnded = false;
 
@@ -71,6 +75,7 @@ const joinBtn = document.getElementById('joinBtn');
 const balanceValue = document.getElementById('balanceValue');
 const playerNameLabel = document.getElementById('playerNameLabel');
 const sectionsWrap = document.getElementById('sectionsWrap');
+const selectionBar = document.getElementById('selectionBar');
 const toast = document.getElementById('toast');
 
 function doJoin(name) {
@@ -89,6 +94,7 @@ function doJoin(name) {
     playerId = res.playerId;
     myName = res.name;
     myPurchases = res.purchases || [];
+    myConfirmed = !!res.confirmed;
     localStorage.setItem('cav_playerId', playerId);
     localStorage.setItem('cav_name', myName);
     balanceValue.textContent = res.balance;
@@ -101,6 +107,7 @@ function doJoin(name) {
       gameScreen.classList.remove('hidden');
     }
     renderSections();
+    renderSelectionBar();
   });
 }
 
@@ -131,22 +138,6 @@ function hasBought(itemId) {
   return myPurchases.some(p => p.itemId === itemId);
 }
 
-function buyItem(itemId, btn) {
-  btn.disabled = true;
-  socket.emit('item:buy', { itemId }, (res) => {
-    if (res.ok) {
-      balanceValue.textContent = res.balance;
-      showToast('購買成功！', true);
-      const item = findItemLocal(itemId);
-      if (item) myPurchases.push({ itemId, title: item.title, price: item.price, sectionTitle: item.sectionTitle });
-      renderSections();
-    } else {
-      btn.disabled = false;
-      showToast(res.reason || '購買失敗', false);
-    }
-  });
-}
-
 function findItemLocal(itemId) {
   for (const s of latestSections) {
     const it = s.items.find(i => i.id === itemId);
@@ -155,31 +146,120 @@ function findItemLocal(itemId) {
   return null;
 }
 
+function toggleSelect(itemId) {
+  if (myConfirmed || hasBought(itemId)) return;
+  if (mySelections.has(itemId)) mySelections.delete(itemId);
+  else mySelections.add(itemId);
+  renderSections();
+  renderSelectionBar();
+}
+
 function renderSections() {
-  sectionsWrap.innerHTML = latestSections.map(section => `
-    <div class="card">
-      <h3 style="color:var(--accent-2);font-size:16px">${section.title}</h3>
-      ${section.items.map(it => {
-        const bought = hasBought(it.id);
-        const canAfford = Number(balanceValue.textContent) >= it.price;
-        return `
-        <div class="item-buy-row">
+  sectionsWrap.innerHTML = `<div class="card items-card">` + latestSections.map(section => `
+    <h3 class="section-title">${section.title}</h3>
+    ${section.items.map(it => {
+      const bought = hasBought(it.id);
+      const selected = mySelections.has(it.id);
+      const locked = myConfirmed;
+      let statusHtml;
+      if (bought) statusHtml = `<div class="item-buy-status locked">已購買 ✓</div>`;
+      else if (locked) statusHtml = `<div class="item-buy-status not-selected">未選</div>`;
+      else if (selected) statusHtml = `<div class="item-buy-status selected">已選 ✓</div>`;
+      else statusHtml = `<div class="item-buy-status not-selected">點選</div>`;
+      const rowClass = ['item-buy-row'];
+      if (selected && !locked) rowClass.push('selected');
+      if (bought) rowClass.push('bought-locked');
+      if (!locked && !bought) rowClass.push('selectable');
+      return `
+        <div class="${rowClass.join(' ')}" data-id="${it.id}">
           <img class="item-thumb" src="/images/${it.id}.jpg" />
           <div class="item-buy-info">
             <div class="item-buy-title">${it.title}</div>
             <div class="item-buy-meta">${it.price} 萬${it.buyerCount > 0 ? ` · 已有 ${it.buyerCount} 人買` : ''}</div>
           </div>
-          ${bought
-            ? `<div class="item-buy-status bought">已購買 ✓</div>`
-            : `<button class="item-buy-btn" data-id="${it.id}" ${!canAfford ? 'disabled' : ''}>${canAfford ? '購買' : '不足'}</button>`
-          }
+          ${statusHtml}
         </div>`;
-      }).join('')}
-    </div>
-  `).join('');
+    }).join('')}
+  `).join('') + `</div>`;
 
-  sectionsWrap.querySelectorAll('.item-buy-btn').forEach(btn => {
-    btn.onclick = () => buyItem(btn.dataset.id, btn);
+  if (!myConfirmed) {
+    sectionsWrap.querySelectorAll('.item-buy-row.selectable').forEach(row => {
+      row.onclick = () => toggleSelect(row.dataset.id);
+    });
+  }
+}
+
+function renderSelectionBar() {
+  const balance = Number(balanceValue.textContent);
+
+  if (myConfirmed) {
+    selectionBar.innerHTML = `
+      <div class="selection-title">你的最終選擇（已送出，無法修改）</div>
+      ${myPurchases.length === 0
+        ? `<p style="color:var(--muted);margin:6px 0 0">沒有選購任何項目</p>`
+        : myPurchases.map(p => `
+          <div class="selected-chip-row">
+            <span>${p.title}</span><span style="color:var(--accent);font-weight:700">${p.price} 萬</span>
+          </div>`).join('')}
+    `;
+    return;
+  }
+
+  const ids = Array.from(mySelections);
+  const items = ids.map(findItemLocal).filter(Boolean);
+  const total = items.reduce((sum, it) => sum + it.price, 0);
+  const remaining = balance - total;
+  const overBudget = remaining < 0;
+
+  selectionBar.innerHTML = `
+    <div class="selection-title">已選 ${items.length} 項</div>
+    ${items.length === 0
+      ? `<p style="color:var(--muted);margin:6px 0">還沒選擇任何項目</p>`
+      : items.map(it => `
+        <div class="selected-chip-row" data-id="${it.id}">
+          <span>${it.title}</span>
+          <span class="selected-chip-right">
+            <span style="color:var(--accent);font-weight:700">${it.price} 萬</span>
+            <button class="chip-remove" data-id="${it.id}">取消</button>
+          </span>
+        </div>`).join('')}
+    <div class="selection-total ${overBudget ? 'over' : ''}">
+      共 ${total} 萬 · 送出後剩 ${remaining} 萬
+    </div>
+    <button id="confirmBtn" class="confirm-btn" ${overBudget ? 'disabled' : ''}>確定送出（送出後無法修改）</button>
+  `;
+
+  selectionBar.querySelectorAll('.chip-remove').forEach(btn => {
+    btn.onclick = (e) => { e.stopPropagation(); toggleSelect(btn.dataset.id); };
+  });
+
+  const confirmBtn = document.getElementById('confirmBtn');
+  if (confirmBtn) confirmBtn.onclick = doConfirmPurchases;
+}
+
+function doConfirmPurchases() {
+  const ids = Array.from(mySelections);
+  const msg = ids.length > 0
+    ? `確定送出這 ${ids.length} 項選擇嗎？送出後就不能再修改了！`
+    : '你目前沒有選擇任何項目，確定要這樣送出嗎？送出後就不能再修改了！';
+  if (!confirm(msg)) return;
+
+  const confirmBtn = document.getElementById('confirmBtn');
+  if (confirmBtn) confirmBtn.disabled = true;
+
+  socket.emit('player:confirmPurchases', { itemIds: ids }, (res) => {
+    if (res.ok) {
+      balanceValue.textContent = res.balance;
+      myPurchases = res.purchases || [];
+      myConfirmed = true;
+      mySelections.clear();
+      showToast('送出成功！', true);
+      renderSections();
+      renderSelectionBar();
+    } else {
+      if (confirmBtn) confirmBtn.disabled = false;
+      showToast(res.reason || '送出失敗', false);
+    }
   });
 }
 
@@ -201,7 +281,10 @@ function showEndScreen() {
 
 socket.on('items:update', (sections) => {
   latestSections = sections;
-  if (!gameScreen.classList.contains('hidden')) renderSections();
+  if (!gameScreen.classList.contains('hidden')) {
+    renderSections();
+    renderSelectionBar();
+  }
 });
 
 socket.on('state:update', (state) => {
@@ -220,8 +303,9 @@ setInterval(() => {
       if (res.ok) {
         balanceValue.textContent = res.balance;
         myPurchases = res.purchases || [];
+        myConfirmed = !!res.confirmed;
         if (gameEnded) showEndScreen();
-        else renderSections();
+        else { renderSections(); renderSelectionBar(); }
       }
     });
   }

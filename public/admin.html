@@ -126,10 +126,10 @@ socket.on('players:update', (list) => {
   playersList.innerHTML = list.map(p => {
     const items = p.purchases.length > 0
       ? p.purchases.map(x => x.title).join('、')
-      : '（尚未購買）';
+      : (p.confirmed ? '（已送出，沒有選購任何項目）' : '（尚未送出選擇）');
     return `<div class="player-row-detail">
       <div style="display:flex;justify-content:space-between">
-        <span class="${p.connected ? '' : 'off'}">${p.name}${p.connected ? '' : '（離線）'}</span>
+        <span class="${p.connected ? '' : 'off'}">${p.name}${p.connected ? '' : '（離線）'}${p.confirmed ? ' ✓已送出' : ''}</span>
         <span>${p.balance} 萬</span>
       </div>
       <div style="color:var(--muted);font-size:12px;margin-top:2px">${items}</div>
