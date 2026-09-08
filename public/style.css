@@ -38,7 +38,7 @@ input {
 
 /* ---------- Player page ---------- */
 .player-wrap {
-  max-width: 480px;
+  max-width: 960px;
   margin: 0 auto;
   padding: 12px;
   min-height: 100vh;
@@ -72,7 +72,7 @@ input {
 
 .item-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 8px;
   margin-bottom: 12px;
 }
@@ -87,6 +87,7 @@ input {
 .item-cell.selectable { cursor: pointer; }
 .item-cell.selected { background: rgba(242, 183, 5, 0.22); outline: 2px solid var(--accent); }
 .item-cell.bought-locked { opacity: 0.75; }
+.item-cell.unaffordable { opacity: 0.45; }
 .item-cell-top { display: flex; align-items: center; gap: 6px; }
 .item-thumb {
   width: 30px;
@@ -108,6 +109,7 @@ input {
 .item-cell-status.locked { color: var(--ok); }
 .item-cell-status.selected { color: #1a1a1a; background: var(--accent); }
 .item-cell-status.not-selected { color: var(--muted); font-weight: 400; }
+.item-cell-status.unaffordable { color: var(--danger); font-weight: 400; }
 
 /* ---------- Selection bar (bottom summary, part of normal page flow) ---------- */
 .selection-bar {

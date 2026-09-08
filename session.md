@@ -115,6 +115,21 @@ Render 免費方案冷啟動（閒置後喚醒要 30-60 秒），`player.html` �
    `myBalance - 已選總價`，送出後顯示 `myBalance`），每次勾選/取消、送出成功、
    價格變動都要呼叫這個函式同步畫面。
 
+### 再一輪微調：寬螢幕還是要捲動、籌碼可能顯示負數（同一天）
+
+案主用寬視窗（桌面瀏覽器）截圖回報還是要捲動——根因是 `.player-wrap` 寫死
+`max-width: 480px`，不管視窗多寬都只用中間一小條，右邊一大片空白被浪費掉。
+改成 `max-width: 960px`，並把 `.item-grid` 從固定 2 欄改成
+`grid-template-columns: repeat(auto-fill, minmax(150px, 1fr))`，欄數會隨可用寬度
+自動增加（寬螢幕更多欄、手機窄螢幕還是自動收斂成 2 欄），不用另外寫 media query。
+
+同時案主抓到一個邏輯漏洞：勾選到超過籌碼時，頂部餘額預覽會顯示負數。修法是
+**在勾選當下就擋掉「選了會超支」的項目**，而不是讓你選完在送出時才擋：
+`toggleSelect()` 勾選前檢查 `myBalance - 已選總價 >= 這項價格`，不夠就跳 toast
+「籌碼不足，選不了這一項」直接擋下，不會加進 `mySelections`；`renderSections()`
+也會把選不起的項目標成「籌碼不足」灰階不可點擊。這樣餘額在正常操作下永遠
+不會變負數，不是靠事後隱藏或 clamp 數字。
+
 ## 目前狀態
 
 - GitHub repo：`https://github.com/jamespassion99/church-value-auction`
